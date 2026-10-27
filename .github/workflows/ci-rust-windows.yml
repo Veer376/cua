@@ -62,7 +62,7 @@ jobs:
   unit:
     if: ${{ !startsWith(github.head_ref, 'release-please--branches--') }}
     name: Rust Windows unit and compile
-    runs-on: cua-windows-8core
+    runs-on: windows-latest
     # The suite below has been running within a hair of this budget for months:
     # the last green run on `main` (359fad56) took 28m31s of 30m. The tests this
     # branch adds push it past the line, and the failure mode is silent -- every
@@ -221,3 +221,12 @@ jobs:
         if: steps.runner-session.outputs.session_id != '0'
         working-directory: libs/cua-driver/rust
         run: cargo test -p cua-driver --test protocol_schema_test --locked
+
+      - name: Strict Windows clippy for changed Driver crates
+        working-directory: libs/cua-driver/rust
+        shell: pwsh
+        run: |
+          rustup component add clippy
+          if ($LASTEXITCODE -ne 0) { throw "clippy installation failed" }
+          cargo clippy --locked -p cua-driver-core -p cua-driver -p cua-driver-e2e -p platform-macos --all-targets -- -D warnings
+          if ($LASTEXITCODE -ne 0) { throw "Windows clippy failed" }
