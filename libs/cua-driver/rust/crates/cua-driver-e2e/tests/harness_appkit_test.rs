@@ -37,6 +37,9 @@ use cua_driver_testkit::observer::{NativeObserver, ObserverBackend, TargetWindow
 use cua_driver_testkit::sentinel::run_with_background_oracles;
 use cua_driver_testkit::{Driver, McpDriver, ToolResponse};
 
+#[path = "support/appkit_text_selection.rs"]
+mod text_selection;
+
 #[path = "support/appkit_snapshot_publication.rs"]
 mod snapshot_publication;
 
