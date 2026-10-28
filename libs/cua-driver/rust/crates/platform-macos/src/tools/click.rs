@@ -148,9 +148,12 @@ fn press_error_may_have_acted(err: crate::ax::bindings::AXError) -> bool {
     use crate::ax::bindings::{
         kAXErrorActionUnsupported, kAXErrorAttributeUnsupported, kAXErrorFailure,
     };
-    err == kAXErrorFailure
-        || err == kAXErrorAttributeUnsupported
-        || err == kAXErrorActionUnsupported
+    [
+        kAXErrorFailure,
+        kAXErrorAttributeUnsupported,
+        kAXErrorActionUnsupported,
+    ]
+    .contains(&err)
 }
 
 /// Whether a toggle's value moving from `before` to `now` is what pressing it
