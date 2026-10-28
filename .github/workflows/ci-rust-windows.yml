@@ -14,12 +14,12 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: 8ead6a4b203b92ddbaaae74b46591e25e4eab67b
+          ref: 06012f69f90216dc1b074bffd2c6e5e75e09dc66
           persist-credentials: false
       - name: Verify exact source
         shell: pwsh
         run: |
-          if ((git rev-parse HEAD) -ne '8ead6a4b203b92ddbaaae74b46591e25e4eab67b') { throw 'Wrong source revision' }
+          if ((git rev-parse HEAD) -ne '06012f69f90216dc1b074bffd2c6e5e75e09dc66') { throw 'Wrong source revision' }
       - uses: dtolnay/rust-toolchain@4716b85f2fac3e324e64fa2810f6b5c3905760a5
         with:
           components: clippy
@@ -27,9 +27,9 @@ jobs:
         with:
           workspaces: "libs/cua-driver/rust -> target"
           save-if: 'false'
-      - name: Strict Windows lint (same command as failing proof)
-        working-directory: libs/cua-driver/rust
-        run: cargo clippy --locked -p cua-driver-core -p cua-driver -p cua-driver-e2e -p platform-macos --all-targets -- -D warnings
       - name: Core unit tests
         working-directory: libs/cua-driver/rust
         run: cargo test --locked -p cua-driver-core --lib -- --test-threads=1
+      - name: Strict Windows lint (same command as failing proof)
+        working-directory: libs/cua-driver/rust
+        run: cargo clippy --locked -p cua-driver-core -p cua-driver -p cua-driver-e2e -p platform-macos --all-targets -- -D warnings
