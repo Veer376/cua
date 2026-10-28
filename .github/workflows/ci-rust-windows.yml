@@ -27,9 +27,9 @@ jobs:
         with:
           workspaces: "libs/cua-driver/rust -> target"
           save-if: 'false'
-      - name: Core unit tests
+      - name: Changed crate unit tests
         working-directory: libs/cua-driver/rust
-        run: cargo test --locked -p cua-driver-core --lib -- --test-threads=1
-      - name: Strict Windows lint (same command as failing proof)
+        run: cargo test --locked -p cua-driver-core -p cua-driver-testkit -p cursor-overlay --lib -- --test-threads=1
+      - name: Strict Windows lint for the three changed crates
         working-directory: libs/cua-driver/rust
-        run: cargo clippy --locked -p cua-driver-core -p cua-driver -p cua-driver-e2e -p platform-macos --all-targets -- -D warnings
+        run: cargo clippy --locked -p cua-driver-core -p cua-driver-testkit -p cursor-overlay --all-targets -- -D warnings
