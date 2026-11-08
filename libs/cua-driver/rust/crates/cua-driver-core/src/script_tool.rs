@@ -583,7 +583,7 @@ impl<'a> Api<'a> {
         }
     }
 
-    /// Elements matching {role, name, text} across the app's windows
+    /// Elements matching {role, name, id, within, text} across the app's windows
     /// (topmost first): addressable ones with their element_token, then
     /// matching display-only text rows, whose `value` holds the text.
     async fn find(&mut self, mut args: Map<String, Value>) -> Result<Value, HostError> {
@@ -597,6 +597,7 @@ impl<'a> Api<'a> {
             text,
             ..element
         };
+        let verified_locator = spec.id.is_some() || spec.within.is_some();
         let windows = self
             .locator
             .search_windows(&window)
@@ -618,6 +619,8 @@ impl<'a> Api<'a> {
                         "role",
                         "label",
                         "value",
+                        "identifier",
+                        "ancestor_labels",
                         "enabled",
                         "selected",
                         "frame",
@@ -625,6 +628,12 @@ impl<'a> Api<'a> {
                         if let Some(value) = element.get(key) {
                             out.insert(key.to_owned(), value.clone());
                         }
+                    }
+                    if verified_locator {
+                        // Older signed drivers do not emit this proof. The
+                        // Companion adapter must fail closed rather than
+                        // treating an ignored id/within selector as valid.
+                        out.insert("selector_verified".into(), Value::Bool(true));
                     }
                     out.insert("window".into(), window_json.clone());
                     found.push(Value::Object(out));

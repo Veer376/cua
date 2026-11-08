@@ -1162,6 +1162,12 @@ fn element_entry(node: &crate::ax::tree::AXNode, snapshot_id: Option<u32>) -> se
     if let Some(label) = label {
         entry["label"] = serde_json::Value::String(label);
     }
+    if let Some(identifier) = node.identifier.as_deref().filter(|s| !s.trim().is_empty()) {
+        entry["identifier"] = serde_json::json!(identifier);
+    }
+    if !node.ancestor_labels.is_empty() {
+        entry["ancestor_labels"] = serde_json::json!(node.ancestor_labels);
+    }
     // Surface the element's AXValue separately from `label`. `label`
     // collapses title→description→value→identifier into one display
     // string, so on a control that has BOTH a title/description AND a
@@ -1658,6 +1664,7 @@ mod tests {
             value: None,
             description: None,
             identifier: None,
+            ancestor_labels: Vec::new(),
             help: None,
             actions,
             element_ptr: 0,
@@ -1752,6 +1759,29 @@ mod tests {
         assert!(display.get("element_token").is_none());
         assert_eq!(observed[2]["element_index"], 1);
         assert!(observed[2].get("display_only").is_none());
+    }
+
+    #[test]
+    fn structured_element_exposes_identifier_and_collapsed_group_ancestry() {
+        let mut field = node(
+            Some(1),
+            "AXTextField",
+            Some("Message body"),
+            1,
+            Some(0),
+            Some([2.0, 3.0, 100.0, 22.0]),
+            vec![],
+        );
+        field.identifier = Some("fixture.context.b".into());
+        field.ancestor_labels = vec!["Window".into(), "Compose B".into()];
+        let rows = build_elements_array_with_token(&[field], Some(1));
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["identifier"], "fixture.context.b");
+        assert_eq!(
+            rows[0]["ancestor_labels"],
+            serde_json::json!(["Window", "Compose B"])
+        );
+        assert_eq!(rows[0]["element_token"], "s00000001:1");
     }
 
     #[test]

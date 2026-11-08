@@ -22,7 +22,9 @@ use crate::{
 
 /// Keys a step may add to an action's arguments to name its target. They are
 /// removed before the action tool runs.
-pub(crate) const SELECTOR_KEYS: &[&str] = &["role", "name", "label", "nth", "app", "window"];
+pub(crate) const SELECTOR_KEYS: &[&str] = &[
+    "role", "name", "label", "id", "within", "nth", "app", "window",
+];
 /// Keys a `wait_for` / `expect` check accepts.
 pub(crate) const CHECK_KEYS: &[&str] = &[
     "role",
@@ -106,6 +108,10 @@ impl WindowSpec {
 pub(crate) struct ElementSpec {
     pub role: Option<String>,
     pub name: Option<String>,
+    /// Exact accessibility identifier (never fuzzy/substring-matched).
+    pub id: Option<String>,
+    /// Root-to-leaf named ancestor suffix separated by ` > `.
+    pub within: Option<String>,
     /// Any row of the tree containing this text, display-only rows included.
     pub text: Option<String>,
     pub nth: Option<usize>,
@@ -116,7 +122,11 @@ pub(crate) struct ElementSpec {
 
 impl ElementSpec {
     pub fn is_empty(&self) -> bool {
-        self.role.is_none() && self.name.is_none() && self.text.is_none()
+        self.role.is_none()
+            && self.name.is_none()
+            && self.text.is_none()
+            && self.id.is_none()
+            && self.within.is_none()
     }
 
     pub fn describe(&self) -> String {
@@ -286,6 +296,8 @@ fn element_spec(object: &Map<String, Value>) -> Result<ElementSpec, String> {
     Ok(ElementSpec {
         role: opt_string(object, "role")?,
         name,
+        id: opt_string(object, "id")?,
+        within: opt_string(object, "within")?,
         text: opt_string(object, "text")?,
         nth,
         action: None,
@@ -906,6 +918,31 @@ pub(crate) fn matches<'r>(read: &'r Read, spec: &ElementSpec) -> Vec<&'r Value> 
         .iter()
         .filter(|element| element.get("display_only").and_then(Value::as_bool) != Some(true))
         .filter(|element| {
+            spec.id.as_deref().is_none_or(|expected| {
+                element.get("identifier").and_then(Value::as_str) == Some(expected)
+            })
+        })
+        .filter(|element| {
+            spec.within.as_deref().is_none_or(|within| {
+                let path: Vec<_> = within
+                    .split('>')
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                !path.is_empty()
+                    && element
+                        .get("ancestor_labels")
+                        .and_then(Value::as_array)
+                        .is_some_and(|ancestors| {
+                            ancestors.len() >= path.len()
+                                && ancestors[ancestors.len() - path.len()..]
+                                    .iter()
+                                    .zip(path.iter())
+                                    .all(|(actual, expected)| actual.as_str() == Some(*expected))
+                        })
+            })
+        })
+        .filter(|element| {
             spec.role.as_deref().is_none_or(|role| {
                 element
                     .get("role")
@@ -1251,6 +1288,11 @@ fn selected_state(element: &Value) -> Option<bool> {
 /// that match `spec`, parsed into {role, label, value, text}. Scripts read
 /// values such as "Ticket: 4F2K" from these; they cannot be acted on.
 pub(crate) fn display_rows(read: &Read, spec: &ElementSpec) -> Vec<Value> {
+    // An AX identifier or ancestor constraint is an exact actionable locator;
+    // markdown display rows have no verified structural metadata.
+    if spec.id.is_some() || spec.within.is_some() {
+        return Vec::new();
+    }
     if spec.role.is_none() && spec.name.is_none() && spec.text.is_none() {
         return Vec::new();
     }
@@ -1561,6 +1603,62 @@ mod tests {
             "label": label,
             "frame": {"x": 0, "y": 0, "w": 10, "h": 10},
         })
+    }
+
+    #[test]
+    fn exact_identifier_and_named_ancestor_suffix_disambiguate_duplicate_fields() {
+        let mut target = element(1, "AXTextArea", "Message body");
+        target["identifier"] = json!("message.body.1");
+        target["ancestor_labels"] = json!(["Window", "Compose", "Reply"]);
+        let mut decoy = element(2, "AXTextArea", "Message body");
+        decoy["identifier"] = json!("message.body.2");
+        decoy["ancestor_labels"] = json!(["Window", "Archive", "Reply"]);
+        let read = read(vec![target, decoy], "");
+        let by_id = ElementSpec {
+            role: Some("AXTextArea".into()),
+            name: Some("Message body".into()),
+            id: Some("message.body.1".into()),
+            ..Default::default()
+        };
+        assert_eq!(matches(&read, &by_id).len(), 1);
+        assert_eq!(matches(&read, &by_id)[0]["element_index"], 1);
+        let by_ancestor = ElementSpec {
+            role: Some("AXTextArea".into()),
+            name: Some("Message body".into()),
+            within: Some("Compose > Reply".into()),
+            ..Default::default()
+        };
+        assert_eq!(matches(&read, &by_ancestor).len(), 1);
+        assert_eq!(matches(&read, &by_ancestor)[0]["element_index"], 1);
+        let wrong_id = ElementSpec {
+            id: Some("not.present".into()),
+            ..by_id.clone()
+        };
+        assert!(matches(&read, &wrong_id).is_empty());
+        let wrong_path = ElementSpec {
+            within: Some("Archive > Compose".into()),
+            ..by_ancestor
+        };
+        assert!(matches(&read, &wrong_path).is_empty());
+    }
+
+    #[test]
+    fn structural_selector_rejects_display_only_rows_and_missing_metadata() {
+        let read = read(
+            vec![
+                element(1, "AXTextField", "Message"),
+                json!({"role":"AXStaticText", "label":"Message", "display_only":true}),
+            ],
+            "- AXStaticText \"Message\"",
+        );
+        let spec = ElementSpec {
+            role: Some("textfield".into()),
+            name: Some("Message".into()),
+            id: Some("missing".into()),
+            ..Default::default()
+        };
+        assert!(matches(&read, &spec).is_empty());
+        assert!(display_rows(&read, &spec).is_empty());
     }
 
     #[test]

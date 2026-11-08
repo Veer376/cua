@@ -62,6 +62,9 @@ pub struct AXNode {
     /// Calculator buttons where AXTitle="" but AXDescription="2".
     pub description: Option<String>,
     pub identifier: Option<String>,
+    /// Labelled ancestor chain, including AXGroup layout containers omitted
+    /// from the rendered tree. Root to parent; never an actionable handle.
+    pub ancestor_labels: Vec<String>,
     pub help: Option<String>,
     pub actions: Vec<String>,
     /// The raw AXUIElementRef pointer value, for caching.
@@ -318,6 +321,7 @@ fn walk_tree_with_web_content(
                 0,
                 None,
                 false,
+                &[],
                 &mut nodes,
                 &mut lines,
                 &mut index_counter,
@@ -434,6 +438,7 @@ unsafe fn walk_element(
     depth: usize,
     parent_index: Option<usize>,
     in_web_content: bool,
+    ancestor_labels: &[String],
     nodes: &mut Vec<AXNode>,
     lines: &mut Vec<(usize, String)>,
     counter: &mut usize,
@@ -466,6 +471,15 @@ unsafe fn walk_element(
         // Still recurse — children may be interesting. Layout containers
         // collapse, so children inherit the parent's depth AND the same
         // parent_index (no actionable node was emitted here).
+        let mut child_ancestors = ancestor_labels.to_vec();
+        let label = copy_string_attr(element, "AXTitle")
+            .filter(|value| !value.trim().is_empty())
+            .or_else(|| copy_string_attr(element, "AXDescription"));
+        if let Some(label) = label {
+            if !label.trim().is_empty() && child_ancestors.len() < 12 {
+                child_ancestors.push(label);
+            }
+        }
         let children = copy_children(element);
         for child in children {
             walk_element(
@@ -473,6 +487,7 @@ unsafe fn walk_element(
                 depth,
                 parent_index,
                 in_web_content,
+                &child_ancestors,
                 nodes,
                 lines,
                 counter,
@@ -540,6 +555,7 @@ unsafe fn walk_element(
                 depth + 1,
                 parent_index,
                 in_web_content,
+                ancestor_labels,
                 nodes,
                 lines,
                 counter,
@@ -598,6 +614,7 @@ unsafe fn walk_element(
             identifier: identifier.clone(),
             help: help.clone(),
             actions: actions.clone(),
+            ancestor_labels: ancestor_labels.to_vec(),
             element_ptr,
             depth,
             parent_element_index: parent_index,
@@ -632,6 +649,7 @@ unsafe fn walk_element(
             identifier: identifier.clone(),
             help: help.clone(),
             actions: vec![],
+            ancestor_labels: ancestor_labels.to_vec(),
             element_ptr,
             depth,
             parent_element_index: parent_index,
@@ -669,6 +687,15 @@ unsafe fn walk_element(
         return;
     }
 
+    let mut child_ancestors = ancestor_labels.to_vec();
+    let label = if visible_title.is_empty() {
+        &visible_description
+    } else {
+        &visible_title
+    };
+    if !label.is_empty() && child_ancestors.len() < 12 {
+        child_ancestors.push(label.to_owned());
+    }
     let children = copy_children(element);
     for child in children {
         walk_element(
@@ -676,6 +703,7 @@ unsafe fn walk_element(
             depth + 1,
             next_parent,
             in_web_content,
+            &child_ancestors,
             nodes,
             lines,
             counter,

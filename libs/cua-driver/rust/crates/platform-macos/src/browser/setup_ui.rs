@@ -2026,6 +2026,7 @@ mod tests {
             value: value.map(str::to_owned),
             description: None,
             identifier: None,
+            ancestor_labels: Vec::new(),
             help: None,
             actions: actions.iter().map(|value| (*value).to_owned()).collect(),
             element_ptr: 7,
