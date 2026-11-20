@@ -528,7 +528,14 @@ impl Tool for ScrollTool {
             );
 
             let prior_front = apps::frontmost_pid();
-            let snapshot = WindowChangeDetector::snapshot(prior_front);
+            let fg = delivery_mode.is_foreground() && target.wid.is_some();
+            // Foreground delivery owns activation and restoration. A background
+            // suppressor would steal focus before the input is consumed.
+            let snapshot = if fg {
+                WindowChangeDetector::snapshot_without_suppression(prior_front)
+            } else {
+                WindowChangeDetector::snapshot(prior_front)
+            };
 
             let WheelTarget {
                 screen_x,
@@ -538,9 +545,8 @@ impl Tool for ScrollTool {
                 ..
             } = target;
             let amount_ticks = amount;
-            let fg = delivery_mode.is_foreground() && wid.is_some();
             let result = focus_guard::with_focus_suppressed(
-                Some(pid),
+                if fg { None } else { Some(pid) },
                 prior_front,
                 "scroll.CGScrollWheel",
                 || async move {

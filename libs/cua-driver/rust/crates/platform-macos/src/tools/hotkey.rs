@@ -528,10 +528,16 @@ impl Tool for HotkeyTool {
         // suppressor — wrapping ensures both side-effects are observed
         // and the prior frontmost is restored if the activation lingers.
         let prior_front = apps::frontmost_pid();
-        let snapshot = WindowChangeDetector::snapshot(prior_front);
+        // Foreground delivery owns activation and restoration. A background
+        // suppressor would steal focus before the input is consumed.
+        let snapshot = if fg {
+            WindowChangeDetector::snapshot_without_suppression(prior_front)
+        } else {
+            WindowChangeDetector::snapshot(prior_front)
+        };
 
         let result = focus_guard::with_focus_suppressed(
-            Some(pid),
+            if fg { None } else { Some(pid) },
             prior_front,
             "hotkey.CGEvent",
             || async move {

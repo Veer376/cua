@@ -435,10 +435,16 @@ impl Tool for PressKeyTool {
         // so any reflex activations it triggers are caught by both the
         // wildcard snapshot suppressor and the targeted FocusGuard lease.
         let prior_front = apps::frontmost_pid();
-        let snapshot = WindowChangeDetector::snapshot(prior_front);
+        // Foreground delivery owns activation and restoration. A background
+        // suppressor would steal focus before the input is consumed.
+        let snapshot = if fg {
+            WindowChangeDetector::snapshot_without_suppression(prior_front)
+        } else {
+            WindowChangeDetector::snapshot(prior_front)
+        };
 
         let result = focus_guard::with_focus_suppressed(
-            Some(pid),
+            if fg { None } else { Some(pid) },
             prior_front,
             "press_key.CGEvent",
             || async move {
