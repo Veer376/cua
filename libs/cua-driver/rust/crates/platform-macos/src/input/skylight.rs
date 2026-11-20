@@ -1299,7 +1299,7 @@ pub fn with_foreground_assist(
     body: impl FnOnce() -> anyhow::Result<()>,
 ) -> anyhow::Result<bool> {
     let _turn = foreground_turn();
-    let prior_pid = crate::apps::frontmost_pid();
+    let prior_pid = front_process_pid();
     let set_front = match set_front_process_fn() {
         Some(f) => f,
         None => {
@@ -1437,7 +1437,7 @@ pub fn with_foreground_hid_activation(
     action: impl FnOnce() -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
     let _turn = foreground_turn();
-    let prior_pid = crate::apps::frontmost_pid();
+    let prior_pid = front_process_pid();
     let set_front = set_front_process_fn()
         .ok_or_else(|| anyhow::anyhow!("foreground HID delivery is unavailable"))?;
 
