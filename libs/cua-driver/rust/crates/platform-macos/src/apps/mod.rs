@@ -951,11 +951,27 @@ pub fn frontmost_pid() -> Option<i32> {
 /// Used as the belt-and-braces step in `LaunchAppTool` when the target
 /// has self-activated despite the focus-steal observer.
 pub fn activate_pid(pid: i32) -> bool {
+    activate_pid_with_options(pid, objc2_app_kit::NSApplicationActivationOptions::empty())
+}
+
+/// Activate an explicitly foregrounded app's window group through AppKit.
+/// WindowServer focus alone can leave its windows in Stage Manager's strip.
+pub fn activate_pid_all_windows(pid: i32) -> bool {
+    activate_pid_with_options(
+        pid,
+        objc2_app_kit::NSApplicationActivationOptions::NSApplicationActivateAllWindows,
+    )
+}
+
+fn activate_pid_with_options(
+    pid: i32,
+    options: objc2_app_kit::NSApplicationActivationOptions,
+) -> bool {
     crate::window_change_detector::end_tail();
-    use objc2_app_kit::{NSApplicationActivationOptions, NSRunningApplication};
+    use objc2_app_kit::NSRunningApplication;
     unsafe {
         match NSRunningApplication::runningApplicationWithProcessIdentifier(pid) {
-            Some(app) => app.activateWithOptions(NSApplicationActivationOptions(0)),
+            Some(app) => app.activateWithOptions(options),
             None => false,
         }
     }

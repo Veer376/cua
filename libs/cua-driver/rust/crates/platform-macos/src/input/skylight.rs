@@ -1299,6 +1299,7 @@ pub fn with_foreground_assist(
     body: impl FnOnce() -> anyhow::Result<()>,
 ) -> anyhow::Result<bool> {
     let _turn = foreground_turn();
+    let prior_pid = crate::apps::frontmost_pid();
     let set_front = match set_front_process_fn() {
         Some(f) => f,
         None => {
@@ -1325,13 +1326,18 @@ pub fn with_foreground_assist(
     // key window. Without this the app is "frontmost" to WindowServer while
     // remaining, from AppKit's point of view, unfocused — so the AXFocused
     // write in the body has no responder chain to attach to.
+    crate::apps::activate_pid_all_windows(target_pid);
     make_exact_window_key(target_pid, target_wid);
+    crate::ax::bindings::raise_exact_window_of_pid(target_pid, target_wid);
     await_window_focused(target_pid, target_wid);
 
     let result = body();
 
     if prev_ok {
         unsafe { set_front(prev_psn.as_ptr() as *const c_void, 0, 0x400) };
+        if let Some(pid) = prior_pid {
+            crate::apps::activate_pid(pid);
+        }
     }
 
     result?;
@@ -1431,6 +1437,7 @@ pub fn with_foreground_hid_activation(
     action: impl FnOnce() -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
     let _turn = foreground_turn();
+    let prior_pid = crate::apps::frontmost_pid();
     let set_front = set_front_process_fn()
         .ok_or_else(|| anyhow::anyhow!("foreground HID delivery is unavailable"))?;
 
@@ -1459,6 +1466,7 @@ pub fn with_foreground_hid_activation(
         anyhow::bail!("WindowServer rejected foreground HID activation");
     }
 
+    crate::apps::activate_pid_all_windows(target_pid);
     make_exact_window_key(target_pid, target_wid);
     crate::ax::bindings::raise_exact_window_of_pid(target_pid, target_wid);
     // A slow app (LibreOffice) can take longer than one wait to install its
@@ -1471,6 +1479,9 @@ pub fn with_foreground_hid_activation(
     if !await_window_focused(target_pid, target_wid) {
         if prev_ok {
             unsafe { set_front(prev_psn.as_ptr() as *const c_void, 0, 0x400) };
+            if let Some(pid) = prior_pid {
+                crate::apps::activate_pid(pid);
+            }
         }
         anyhow::bail!(
             "exact target window did not become focused for foreground HID delivery{}",
@@ -1483,6 +1494,9 @@ pub fn with_foreground_hid_activation(
 
     if prev_ok {
         unsafe { set_front(prev_psn.as_ptr() as *const c_void, 0, 0x400) };
+        if let Some(pid) = prior_pid {
+            crate::apps::activate_pid(pid);
+        }
     }
 
     result
